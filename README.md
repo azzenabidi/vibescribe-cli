@@ -1,7 +1,7 @@
 # VibeScribe CLI
 
 [![Tests](https://github.com/azzenabidi/vibescribe-cli/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/azzenabidi/vibescribe-cli/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/azzenabidi/vibescribe-cli?display_name=tag)](https://github.com/azzenabidi/vibescribe-cli/releases/latest)
+[![Release](https://img.shields.io/github/v/release/azzenabidi/vibescribe-cli?label=release&color=green)](https://github.com/azzenabidi/vibescribe-cli/releases/latest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/azzenabidi/vibescribe-cli)](https://goreportcard.com/report/github.com/azzenabidi/vibescribe-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
