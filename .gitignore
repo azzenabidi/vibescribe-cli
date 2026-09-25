@@ -1,0 +1,9 @@
+/bin/
+/.build/
+/build/
+/vendor/
+/.cache/
+*.wav
+*.bin
+*.part
+.mise.toml
