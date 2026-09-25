@@ -1,117 +1,245 @@
 # VibeScribe CLI
 
-Local, offline video-to-text transcription powered by [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
+[![Tests](https://github.com/azzenabidi/vibescribe-cli/actions/workflows/ci.yml/badge.svg?label=tests)](https://github.com/azzenabidi/vibescribe-cli/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/azzenabidi/vibescribe-cli?display_name=tag)](https://github.com/azzenabidi/vibescribe-cli/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/azzenabidi/vibescribe-cli)](https://goreportcard.com/report/github.com/azzenabidi/vibescribe-cli)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`vibescribe` extracts the audio track from a video or audio file with system
-`ffmpeg`, runs it through a local Whisper GGML model, and writes transcripts in
-TXT, SRT, VTT, JSON, or HTML formats. Nothing leaves your machine — the media
-never leaves your device.
+VibeScribe is a local command-line transcription tool for video and audio files. It uses [ffmpeg](https://ffmpeg.org/) for audio extraction and [whisper.cpp](https://github.com/ggml-org/whisper.cpp) for inference, then exports transcripts as TXT, SRT, VTT, JSON, or HTML.
+
+Your media stays on your machine. VibeScribe only contacts Hugging Face when you download a named model; transcription and inference are fully offline.
+
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Models](#models)
+- [Privacy and security](#privacy-and-security)
+- [How it works](#how-it-works)
+- [Development](#development)
+- [Releases](#releases)
+- [Contributing](#contributing)
+- [Support](#support)
+- [Troubleshooting](#troubleshooting)
+- [Project layout](#project-layout)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
 
 ## Features
 
-- **Fully local & offline** — no API keys, no network required for inference
-- **5 output formats** — `txt`, `srt`, `vtt`, `json`, `html` (comma-separable)
-- **Automatic model management** — downloads GGML models from Hugging Face into a cache, verifies downloads, and reuses them across runs
-- **Auto language detection** — or force a language (`en`, `fr`, `es`, …)
-- **Progress bars** — for audio extraction, model download, and transcription
-- **Video/audio inputs** — MP4, MKV, MP3, FLAC, WAV, and anything else ffmpeg reads
+- Local transcription with no cloud API or API key
+- Video and audio input through ffmpeg
+- Whisper models from `tiny` through `large-v3`
+- Automatic language detection or a manually selected language
+- TXT, SRT, VTT, JSON, and HTML exports
+- Reusable model cache with atomic downloads
+- Configurable inference threads and progress output
+- SHA-256 checksums and cross-platform release archives
 
 ## Requirements
 
-- Go 1.22+ (to build)
-- [ffmpeg](https://ffmpeg.org/) (+ `ffprobe`) for audio extraction
-- The whisper.cpp `whisper-cli` for inference (see [Install the engine](#install-the-engine))
+At runtime, VibeScribe needs:
 
-## Install
+- `ffmpeg` and `ffprobe` on `PATH`
+- The whisper.cpp `whisper-cli` engine on `PATH`, or a path in `VIBESCRIBE_WHISPER_CLI`
+- A Whisper GGML model, either cached or supplied as a local `.bin` file
+
+Building from source requires Go 1.25 or newer. Building `whisper-cli` from source additionally requires Git, CMake, Make, and a C/C++ toolchain.
+
+Release archives contain only VibeScribe. They do not bundle ffmpeg, whisper.cpp, or model weights.
+
+## Installation
+
+### Prebuilt release
+
+Download the archive for your operating system and architecture from [GitHub Releases](https://github.com/azzenabidi/vibescribe-cli/releases/latest), then place `vibescribe` or `vibescribe.exe` on your `PATH`.
+
+Release archives are available for Linux, macOS, and Windows on AMD64 and ARM64.
+
+### Build from source
 
 ```bash
-make install          # builds and copies vibescribe to /usr/local/bin
-# or
-go install github.com/azzenabidi/vibescribe-cli/cmd@latest
+git clone https://github.com/azzenabidi/vibescribe-cli.git
+cd vibescribe-cli
+make build
+./bin/vibescribe --version
 ```
 
-### Install the engine
+On Linux, `sudo make install` copies the binary to `/usr/local/bin/vibescribe`.
 
-The default engine is the whisper.cpp command-line tool:
+To build directly with Go on any supported platform:
 
 ```bash
-make whisper-cli      # clones whisper.cpp v1.9.4, builds it, installs bin/whisper-cli
+go build -trimpath -o vibescribe ./cmd
 ```
 
-`vibescribe` locates `whisper-cli` on `PATH`, or you can point at a specific
-binary (any whisper.cpp build, e.g. one compiled for the WhisperQtTranscriber
-app) with the `VIBESCRIBE_WHISPER_CLI` environment variable:
+### Install whisper.cpp
+
+Use an existing `whisper-cli` build, or build the pinned v1.9.4 engine from a source checkout:
+
+```bash
+make whisper-cli
+export PATH="$PWD/bin:$PATH"
+```
+
+You can also point VibeScribe to a specific binary:
 
 ```bash
 export VIBESCRIBE_WHISPER_CLI=/path/to/whisper-cli
 ```
 
+The engine and ffmpeg are runtime dependencies; VibeScribe does not manage or update them automatically.
+
 ## Usage
 
+Transcribe a file with automatic language detection:
+
 ```bash
-vibescribe transcribe -i input.mp4 -m base -f txt,srt,json -o ./transcripts
+vibescribe transcribe -i input.mp4
+```
+
+Choose a model, output formats, and an output directory:
+
+```bash
+vibescribe transcribe \
+  -i talk.mp4 \
+  -m small \
+  -f srt,json,html \
+  -o transcripts
 ```
 
 | Flag | Default | Description |
-|------|---------|-------------|
-| `-i, --input` | *required* | Input video or audio file |
-| `-m, --model` | `base` | Model size (`tiny`, `base`, `small`, `medium`, `large-v3`) or a path to a `.bin` GGML model |
+| --- | --- | --- |
+| `-i, --input` | Required | Input video or audio path |
+| `-m, --model` | `base` | Model name or path to a GGML `.bin` model |
 | `-f, --format` | `txt,srt` | Comma-separated formats: `txt`, `srt`, `vtt`, `json`, `html` |
 | `-o, --output-dir` | `.` | Directory for transcript files |
-| `-l, --language` | `auto` | Spoken language (`en`, `fr`, `es`, …) or `auto` |
-| `-t, --threads` | all CPUs | Inference threads |
-| `--yes` | | Skip download confirmation prompts |
-| `--keep-wav` | | Keep the extracted temporary WAV |
+| `-l, --language` | `auto` | Language code such as `en`, `fr`, or `es`, or `auto` |
+| `-t, --threads` | All CPUs | Number of inference threads |
+| `--yes` | `false` | Skip model download confirmation |
+| `--keep-wav` | `false` | Keep the extracted WAV file |
 
-Output files are named after the input: `input.mp4` + `-f txt` → `input.txt`.
+Run `vibescribe --help` or `vibescribe transcribe --help` for the complete command reference.
 
-### Managing models
+Output files use the input filename without its extension. For example, `talk.mp4` with `--format srt` produces `talk.srt`.
+
+## Models
+
+List known and cached models:
 
 ```bash
-vibescribe model download small       # fetch the ~466 MB Small model
-vibescribe model download             # default: base
-vibescribe model list                 # cached + known models
+vibescribe model list
 ```
 
-Models are verified to be non-empty on download and cached in
-`~/.cache/vibescribe/models/` (honors `$XDG_CACHE_HOME`), so transcribing never
-asks twice. A cancelled or interrupted download leaves no partial model behind.
+Download a model before transcription:
 
-### Example
-
-```console
-$ vibescribe transcribe -i 2026-05-30-talk.mp4 -m base -f srt,json -o out/
-Extracting audio track 100%
-Transcribing 100% |████████████████████████████████████████|
-Transcription complete
-  Language:   en
-  Segments:   12
-  Output:
-    out/2026-05-30-talk.srt
-    out/2026-05-30-talk.json
+```bash
+vibescribe model download small
 ```
+
+Models are stored in `$XDG_CACHE_HOME/vibescribe/models` or `~/.cache/vibescribe/models`. You can also pass any local GGML model path with `--model /path/to/model.bin`.
+
+VibeScribe downloads named models over HTTPS and rejects empty responses. It does not currently verify model checksums or signatures; use a separately verified model when that assurance is required.
+
+## Privacy and security
+
+- Input media and generated transcripts are processed locally.
+- VibeScribe does not upload media, audio, text, or model files.
+- Named model downloads contact `huggingface.co` and are cached locally.
+- Release archives include a SHA-256 checksum file for integrity verification.
 
 ## How it works
 
-```
-input (mp4/mkv/mp3/…) ──ffmpeg──▶ 16 kHz mono PCM WAV ──whisper-cli──▶ segments ──▶ txt/srt/vtt/json/html
+```text
+media ──ffmpeg──▶ 16 kHz mono PCM WAV ──whisper-cli──▶ segments ──▶ transcript formats
 ```
 
-1. `ffmpeg` demuxes the audio track into a 16 kHz mono 16-bit WAV.
-2. `whisper-cli` (with `-oj -pp`) peforms local inference using the GGML model.
-3. Segments (with millisecond offsets) are parsed from whisper's JSON output
-   and rendered into every requested format.
+1. `ffprobe` determines the media duration for progress reporting.
+2. `ffmpeg` extracts a 16 kHz mono 16-bit PCM WAV track.
+3. `whisper-cli` runs local inference and emits JSON with timestamped segments.
+4. VibeScribe renders the selected transcript formats.
+
+## Development
+
+Run the same quality gate used by CI:
+
+```bash
+make check
+```
+
+This verifies modules, checks formatting, runs `go vet`, runs tests with the race detector, and builds the CLI.
+
+Useful commands:
+
+```bash
+make fmt
+make vet
+make test
+make build
+```
+
+The test suite is deterministic and does not require ffmpeg, whisper-cli, model downloads, or network access.
+
+## Releases
+
+Push a semantic version tag such as `v0.1.0`:
+
+```bash
+git tag -s v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The release workflow verifies the tagged commit, builds Linux, macOS, and Windows binaries, creates archives and SHA-256 checksums, and opens a draft GitHub Release for review.
+
+## Contributing
+
+Contributions are welcome. Open an issue before starting a substantial change, keep pull requests focused, add or update tests and documentation, and run `make check` before submitting.
+
+## Support
+
+Use [GitHub Issues](https://github.com/azzenabidi/vibescribe-cli/issues) for reproducible bugs and feature requests. Include the VibeScribe version, operating system, architecture, exact command, and relevant ffmpeg or whisper.cpp version. Do not attach private media or model files.
+
+## Troubleshooting
+
+### `ffmpeg` or `ffprobe` is missing
+
+Install ffmpeg and ensure both commands are available on `PATH`:
+
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
+### `whisper-cli` was not found
+
+Install the engine, add it to `PATH`, or set `VIBESCRIBE_WHISPER_CLI` to its full path.
+
+### A model is missing
+
+Run `vibescribe model list`, then download the required model with `vibescribe model download <name>`. Alternatively, pass an existing `.bin` file to `--model`.
+
+### No usable audio was produced
+
+Confirm that the input contains an audio stream and that `ffprobe` can inspect it. Corrupt files or video-only inputs cannot be transcribed.
 
 ## Project layout
 
+```text
+cmd/            Cobra CLI commands
+pkg/audio/      ffmpeg and ffprobe integration
+pkg/model/      model resolution, cache, and downloads
+pkg/transcriber whisper.cpp process and output parsing
+pkg/exporter/   transcript format rendering
 ```
-cmd/            CLI entrypoint (cobra): root, transcribe, model
-pkg/audio/      ffmpeg/ffprobe wrappers + progress parsing
-pkg/model/      model cache, download + verification, HEAD sizing
-pkg/transcriber whisper-cli runner + JSON/segment parsing
-pkg/exporter/   txt/srt/vtt/json/html renderers
-```
+
+## Acknowledgments
+
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) provides local speech recognition.
+- [FFmpeg](https://ffmpeg.org/) provides media demuxing and audio extraction.
+- [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp) hosts the default model downloads.
 
 ## License
 
-[MIT](LICENSE)
+VibeScribe CLI is available under the [MIT License](LICENSE). whisper.cpp and downloaded Whisper models are separate third-party components with their own licenses.
